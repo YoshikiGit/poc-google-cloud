@@ -1,0 +1,48 @@
+steps:
+  - name: 'python:3.11'
+    entrypoint: 'pip'
+    args: ['install', '-r', 'requirements.txt']
+    id: 'install-dependencies'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args: 
+      - 'functions'
+      - 'deploy'
+      - 'hello-world'                    # 関数名（デプロイ後のサービス名）
+      - '--gen2'                         # 第2世代を使用
+      - '--runtime=python311'            # Pythonランタイム
+      - '--region=${_REGION}'            # デプロイリージョン
+      - '--source=.'                     # ソースコードの場所
+      - '--entry-point=hello_world'      # エントリーポイント（関数名）
+      - '--trigger=http'                 # HTTPトリガー
+      - '--allow-unauthenticated'        # 認証なしでアクセス許可
+      - '--memory=${_MEMORY}'            # メモリ設定
+      - '--timeout=${_TIMEOUT}'          # タイムアウト設定
+      - '--max-instances=${_MAX_INSTANCES}' # 最大インスタンス数
+      - '--set-env-vars=ENV=${_ENVIRONMENT}' # 環境変数
+    id: 'deploy-function'
+    waitFor: ['install-dependencies']
+
+# 置換変数（デフォルト値）
+substitutions:
+  _REGION: 'asia-northeast1'           # デプロイリージョン
+  _MEMORY: '256Mi'                     # メモリ設定
+  _TIMEOUT: '60s'                      # タイムアウト
+  _MAX_INSTANCES: '10'                 # 最大インスタンス数
+  _ENVIRONMENT: 'production'           # 環境
+
+# ビルドのオプション設定
+options:
+  # ビルド実行時のマシンタイプ
+  machineType: 'E2_HIGHCPU_8'
+  
+  # ビルドログ
+  logging: CLOUD_LOGGING_ONLY
+  
+  # 環境変数
+  env:
+    - 'CLOUDSDK_PYTHON_SITEPACKAGES=1'
+
+# タイムアウト設定（全体）
+timeout: '1200s'
