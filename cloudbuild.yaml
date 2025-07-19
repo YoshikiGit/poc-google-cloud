@@ -1,48 +1,110 @@
 steps:
-  - name: 'python:3.11'
-    entrypoint: 'pip'
-    args: ['install', '-r', 'requirements.txt']
-    id: 'install-dependencies'
-
+  # 現在の設定確認
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args: 
-      - 'functions'
-      - 'deploy'
-      - 'hello-world'                    # 関数名（デプロイ後のサービス名）
-      - '--gen2'                         # 第2世代を使用
-      - '--runtime=python311'            # Pythonランタイム
-      - '--region=${_REGION}'            # デプロイリージョン
-      - '--source=.'                     # ソースコードの場所
-      - '--entry-point=hello_world'      # エントリーポイント（関数名）
-      - '--trigger=http'                 # HTTPトリガー
-      - '--allow-unauthenticated'        # 認証なしでアクセス許可
-      - '--memory=${_MEMORY}'            # メモリ設定
-      - '--timeout=${_TIMEOUT}'          # タイムアウト設定
-      - '--max-instances=${_MAX_INSTANCES}' # 最大インスタンス数
-      - '--set-env-vars=ENV=${_ENVIRONMENT}' # 環境変数
-    id: 'deploy-function'
-    waitFor: ['install-dependencies']
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== 現在の設定確認 ==="
+        if gcloud run services describe hello-world --region=${_REGION} 2>/dev/null; then
+          echo "既存サービスが見つかりました。上書き更新します。"
+          gcloud run services describe hello-world --region=${_REGION} \
+            --format="table(
+              status.url,
+              status.ingress,
+              spec.template.spec.containers[0].resources.limits.memory,
+              spec.template.spec.timeoutSeconds,
+              spec.template.metadata.annotations['autoscaling.knative.dev/maxScale']
+            )"
+        else
+          echo "新規デプロイを実行します。"
+        fi
+        echo ""
+    id: 'check-current'
 
-# 置換変数（デフォルト値）
+  # 設定値を確認してからデプロイ/更新
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== 置換変数の確認 ==="
+        echo "リージョン: ${_REGION}"
+        echo "メモリ: ${_MEMORY}"
+        echo "タイムアウト: ${_TIMEOUT}"
+        echo "最大インスタンス: ${_MAX_INSTANCES}"
+        echo "最小インスタンス: ${_MIN_INSTANCES}"
+        echo "環境: ${_ENVIRONMENT}"
+        echo ""
+        
+        echo "=== Cloud Run Functions 上書きデプロイ ==="
+        gcloud functions deploy hello-world \
+          --gen2 \
+          --runtime=python311 \
+          --region=${_REGION} \
+          --source=. \
+          --entry-point=hello_world \
+          --trigger=http \
+          --allow-unauthenticated \
+          --ingress-settings=internal-and-cloud-load-balancing \
+          --memory=${_MEMORY} \
+          --timeout=${_TIMEOUT} \
+          --max-instances=${_MAX_INSTANCES} \
+          --min-instances=${_MIN_INSTANCES} \
+          --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=internal-only,LAST_UPDATED=$(date -u +%Y%m%d_%H%M%S) \
+          --verbosity=info
+        
+        echo ""
+        echo "=== 上書き後の設定確認 ==="
+        gcloud run services describe hello-world --region=${_REGION} \
+          --format="table(
+            status.url,
+            status.ingress,
+            spec.template.spec.containers[0].resources.limits.memory,
+            spec.template.spec.timeoutSeconds,
+            spec.template.metadata.annotations['autoscaling.knative.dev/maxScale'],
+            spec.template.metadata.annotations['autoscaling.knative.dev/minScale']
+          )"
+        
+        # 設定値の検証
+        ACTUAL_MEMORY=$(gcloud run services describe hello-world \
+          --region=${_REGION} \
+          --format="value(spec.template.spec.containers[0].resources.limits.memory)")
+        
+        ACTUAL_TIMEOUT=$(gcloud run services describe hello-world \
+          --region=${_REGION} \
+          --format="value(spec.template.spec.timeoutSeconds)")
+        
+        ACTUAL_MAX_INSTANCES=$(gcloud run services describe hello-world \
+          --region=${_REGION} \
+          --format="value(spec.template.metadata.annotations['autoscaling.knative.dev/maxScale'])")
+        
+        echo ""
+        echo "=== 設定値検証 ==="
+        echo "✓ メモリ: ${_MEMORY} → $ACTUAL_MEMORY"
+        echo "✓ タイムアウト: ${_TIMEOUT} → ${ACTUAL_TIMEOUT}s"
+        echo "✓ 最大インスタンス: ${_MAX_INSTANCES} → $ACTUAL_MAX_INSTANCES"
+        
+        # 設定が正しく反映されているか確認
+        if [ "$ACTUAL_MEMORY" = "${_MEMORY}" ] && [ "$ACTUAL_TIMEOUT" = "${_TIMEOUT%s}" ] && [ "$ACTUAL_MAX_INSTANCES" = "${_MAX_INSTANCES}" ]; then
+          echo "✅ すべての設定が正しく反映されました"
+        else
+          echo "⚠️ 一部の設定が期待値と異なります"
+        fi
+    id: 'update-functions'
+    waitFor: ['check-current']
+
+# 置換変数
 substitutions:
-  _REGION: 'asia-northeast1'           # デプロイリージョン
-  _MEMORY: '256Mi'                     # メモリ設定
-  _TIMEOUT: '60s'                      # タイムアウト
-  _MAX_INSTANCES: '10'                 # 最大インスタンス数
-  _ENVIRONMENT: 'production'           # 環境
+  _REGION: 'asia-northeast1'
+  _MEMORY: '256Mi'
+  _TIMEOUT: '60s'
+  _MAX_INSTANCES: '5'
+  _MIN_INSTANCES: '0'
+  _ENVIRONMENT: 'development'
 
-# ビルドのオプション設定
 options:
-  # ビルド実行時のマシンタイプ
   machineType: 'E2_HIGHCPU_8'
-  
-  # ビルドログ
   logging: CLOUD_LOGGING_ONLY
-  
-  # 環境変数
-  env:
-    - 'CLOUDSDK_PYTHON_SITEPACKAGES=1'
 
-# タイムアウト設定（全体）
 timeout: '1200s'

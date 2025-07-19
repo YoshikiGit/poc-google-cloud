@@ -3,29 +3,24 @@ import json
 from datetime import datetime
 import logging
 
-# ロギングの設定
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 1. 基本的なHTTP関数
 @functions_framework.http
 def hello_world(request):
     """
     基本的なHTTP関数のサンプル
     GET/POSTリクエストを処理
     """
-    # CORSヘッダーを設定
     headers = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type'
     }
     
-    # OPTIONSリクエストの処理（CORS）
     if request.method == 'OPTIONS':
         return ('', 204, headers)
     
-    # リクエストメソッドに応じた処理
     if request.method == 'GET':
         name = request.args.get('name', 'World')
         message = f"Hello, {name}!"
@@ -41,7 +36,6 @@ def hello_world(request):
     else:
         return ('Method not allowed', 405, headers)
     
-    # レスポンスデータ
     response_data = {
         'message': message,
         'timestamp': datetime.now().isoformat(),
