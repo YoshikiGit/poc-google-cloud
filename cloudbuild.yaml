@@ -42,16 +42,16 @@ steps:
           --gen2 \
           --runtime=python311 \
           --region=${_REGION} \
-          --source=. \
+          --source=./cloud_run_functions \
           --entry-point=hello_world \
           --trigger-http \
-          --allow-unauthenticated \
-          --ingress-settings=internal-and-gclb \
+          --no-allow-unauthenticated \
+          --ingress-settings=all \
           --memory=${_MEMORY} \
           --timeout=${_TIMEOUT} \
           --max-instances=${_MAX_INSTANCES} \
           --min-instances=${_MIN_INSTANCES} \
-          --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=internal-only \
+          --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=all \
           --verbosity=info
         
         echo ""
