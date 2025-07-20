@@ -51,7 +51,7 @@ steps:
           --timeout=${_TIMEOUT} \
           --max-instances=${_MAX_INSTANCES} \
           --min-instances=${_MIN_INSTANCES} \
-          --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=internal-only,LAST_UPDATED=`date -u +%Y%m%d_%H%M%S` \
+          --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=internal-only \
           --verbosity=info
         
         echo ""
@@ -65,20 +65,28 @@ steps:
             spec.template.metadata.annotations['autoscaling.knative.dev/maxScale'],
             spec.template.metadata.annotations['autoscaling.knative.dev/minScale']
           )"
-        
-        # 設定値の検証
-        echo ""
-        echo "=== 設定値検証 ==="
-        ACTUAL_MEM=`gcloud run services describe hello-world --region=${_REGION} --format="value(spec.template.spec.containers[0].resources.limits.memory)"`
-        ACTUAL_TO=`gcloud run services describe hello-world --region=${_REGION} --format="value(spec.template.spec.timeoutSeconds)"`
-        ACTUAL_MAX=`gcloud run services describe hello-world --region=${_REGION} --format="value(spec.template.metadata.annotations['autoscaling.knative.dev/maxScale'])"`
-        
-        echo "✓ メモリ: ${_MEMORY} → $ACTUAL_MEM"
-        echo "✓ タイムアウト: ${_TIMEOUT} → ${ACTUAL_TO}s"
-        echo "✓ 最大インスタンス: ${_MAX_INSTANCES} → $ACTUAL_MAX"
-        
     id: 'update-functions'
     waitFor: ['check-current']
+
+  # ステップ3: 設定値検証
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== 設定値検証 ==="
+        
+        # 変数名を短縮して問題を回避
+        MEM_RESULT=$(gcloud run services describe hello-world --region=${_REGION} --format="value(spec.template.spec.containers[0].resources.limits.memory)")
+        TIMEOUT_RESULT=$(gcloud run services describe hello-world --region=${_REGION} --format="value(spec.template.spec.timeoutSeconds)")
+        MAX_RESULT=$(gcloud run services describe hello-world --region=${_REGION} --format="value(spec.template.metadata.annotations['autoscaling.knative.dev/maxScale'])")
+        
+        echo "✓ メモリ設定: 期待=${_MEMORY} → 実際=$MEM_RESULT"
+        echo "✓ タイムアウト設定: 期待=${_TIMEOUT} → 実際=${TIMEOUT_RESULT}s"
+        echo "✓ 最大インスタンス設定: 期待=${_MAX_INSTANCES} → 実際=$MAX_RESULT"
+        
+    id: 'validate-settings'
+    waitFor: ['update-functions']
 
 substitutions:
   _REGION: 'asia-northeast1'
