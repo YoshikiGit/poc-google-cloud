@@ -44,7 +44,7 @@ steps:
           --region=${_REGION} \
           --source=. \
           --entry-point=hello_world \
-          --trigger=http \
+          --trigger-http \
           --allow-unauthenticated \
           --ingress-settings=internal-and-gclb \
           --memory=${_MEMORY} \
