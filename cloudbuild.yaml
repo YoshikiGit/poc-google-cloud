@@ -21,7 +21,7 @@ steps:
         fi
         
         SERVICE_STATUS=`cat /workspace/service_status`
-        echo "サービス状態: $SERVICE_STATUS"
+        echo "サービス状態: ${SERVICE_STATUS}"
         
         echo ""
         echo "=== 設定値 ==="
@@ -40,7 +40,7 @@ steps:
       - |
         SERVICE_STATUS=`cat /workspace/service_status`
         
-        if [ "$SERVICE_STATUS" = "existing" ]; then
+        if [ "${SERVICE_STATUS}" = "existing" ]; then
           echo "=== 既存サービスの更新 ==="
           
           gcloud run services update hello-world \
@@ -69,7 +69,7 @@ steps:
       - |
         SERVICE_STATUS=`cat /workspace/service_status`
         
-        if [ "$SERVICE_STATUS" = "new" ]; then
+        if [ "${SERVICE_STATUS}" = "new" ]; then
           echo "=== 新規関数の作成 ==="
           
           gcloud functions deploy hello-world \
