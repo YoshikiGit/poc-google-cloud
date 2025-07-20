@@ -10,49 +10,39 @@ steps:
         # Cloud Runサービスとして存在するかチェック
         if gcloud run services describe hello-world --region=${_REGION} 2>/dev/null; then
           echo "✅ 既存のCloud Runサービスが見つかりました"
-          echo "update" > /workspace/deploy_mode.txt
+          echo "existing" > /workspace/service_status
           
           echo "現在の設定:"
           gcloud run services describe hello-world --region=${_REGION} \
-            --format="table(
-              status.url,
-              status.ingress,
-              spec.template.spec.containers[0].resources.limits.memory,
-              spec.template.spec.timeoutSeconds,
-              spec.template.metadata.annotations['autoscaling.knative.dev/maxScale']
-            )"
+            --format="table(status.url,status.ingress,spec.template.spec.containers[0].resources.limits.memory)"
         else
           echo "📝 既存サービスが見つかりません"
-          echo "create" > /workspace/deploy_mode.txt
+          echo "new" > /workspace/service_status
         fi
         
-        DEPLOY_MODE=$(cat /workspace/deploy_mode.txt)
-        echo ""
-        echo "デプロイモード: $DEPLOY_MODE"
+        SERVICE_STATUS=`cat /workspace/service_status`
+        echo "サービス状態: $SERVICE_STATUS"
         
         echo ""
-        echo "=== 置換変数の確認 ==="
+        echo "=== 設定値 ==="
         echo "リージョン: ${_REGION}"
         echo "メモリ: ${_MEMORY}"
         echo "タイムアウト: ${_TIMEOUT}"
         echo "最大インスタンス: ${_MAX_INSTANCES}"
-        echo "最小インスタンス: ${_MIN_INSTANCES}"
         echo "環境: ${_ENVIRONMENT}"
-        echo ""
     id: 'check-service'
 
-  # ステップ2: 既存サービス更新（条件付き実行）
+  # ステップ2: 既存サービス更新
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        DEPLOY_MODE=$(cat /workspace/deploy_mode.txt)
+        SERVICE_STATUS=`cat /workspace/service_status`
         
-        if [ "$DEPLOY_MODE" = "update" ]; then
+        if [ "$SERVICE_STATUS" = "existing" ]; then
           echo "=== 既存サービスの更新 ==="
           
-          # Cloud Runサービスとして更新
           gcloud run services update hello-world \
             --region=${_REGION} \
             --no-allow-unauthenticated \
@@ -66,23 +56,22 @@ steps:
           
           echo "✅ 既存サービス更新完了"
         else
-          echo "既存サービスが見つからないため、このステップをスキップします"
+          echo "新規作成のため、このステップをスキップ"
         fi
-    id: 'update-service'
+    id: 'update-existing'
     waitFor: ['check-service']
 
-  # ステップ3: 新規サービス作成（条件付き実行）
+  # ステップ3: 新規サービス作成
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        DEPLOY_MODE=$(cat /workspace/deploy_mode.txt)
+        SERVICE_STATUS=`cat /workspace/service_status`
         
-        if [ "$DEPLOY_MODE" = "create" ]; then
+        if [ "$SERVICE_STATUS" = "new" ]; then
           echo "=== 新規関数の作成 ==="
           
-          # Cloud Run Functionsとして新規作成
           gcloud functions deploy hello-world \
             --gen2 \
             --runtime=python311 \
@@ -101,9 +90,9 @@ steps:
           
           echo "✅ 新規関数作成完了"
         else
-          echo "既存サービスが見つかったため、このステップをスキップします"
+          echo "既存サービス更新のため、このステップをスキップ"
         fi
-    id: 'create-service'
+    id: 'create-new'
     waitFor: ['check-service']
 
 
