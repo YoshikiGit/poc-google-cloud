@@ -58,7 +58,7 @@ steps:
             --region=${_REGION} \
             --source=./cloud_run_functions \
             --entry-point=hello_world \
-            --trigger=http \
+            --trigger-http \
             --no-allow-unauthenticated \
             --ingress-settings=all \
             --memory=${_MEMORY} \
