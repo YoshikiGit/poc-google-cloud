@@ -10,7 +10,7 @@ steps:
         # Cloud Runサービスとして存在するかチェック
         if gcloud run services describe hello-world --region=${_REGION} 2>/dev/null; then
           echo "✅ 既存のCloud Runサービスが見つかりました"
-          DEPLOY_TYPE="update"
+          MODE="update"
           
           echo "現在の設定:"
           gcloud run services describe hello-world --region=${_REGION} \
@@ -23,12 +23,12 @@ steps:
             )"
         else
           echo "📝 既存サービスが見つかりません"
-          DEPLOY_TYPE="create"
+          MODE="create"
         fi
         
         echo ""
-        echo "デプロイタイプ: $DEPLOY_TYPE"
-        echo "$DEPLOY_TYPE" > /workspace/deploy_type.txt
+        echo "デプロイモード: $MODE"
+        echo "$MODE" > /workspace/mode.txt
         
         echo ""
         echo "=== 置換変数の確認 ==="
@@ -47,9 +47,9 @@ steps:
     args:
       - '-c'
       - |
-        DEPLOY_TYPE=$(cat /workspace/deploy_type.txt)
+        MODE=$(cat /workspace/mode.txt)
         
-        if [ "$DEPLOY_TYPE" = "update" ]; then
+        if [ "$MODE" = "update" ]; then
           echo "=== 既存サービスの更新 ==="
           
           # Cloud Runサービスとして更新
@@ -61,7 +61,7 @@ steps:
             --timeout=${_TIMEOUT} \
             --max-instances=${_MAX_INSTANCES} \
             --min-instances=${_MIN_INSTANCES} \
-            --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=authenticated,DEPLOY_TYPE=update \
+            --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=authenticated,MODE=update \
             --verbosity=info
           
           echo "✅ 既存サービス更新完了"
@@ -83,7 +83,7 @@ steps:
             --timeout=${_TIMEOUT} \
             --max-instances=${_MAX_INSTANCES} \
             --min-instances=${_MIN_INSTANCES} \
-            --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=authenticated,DEPLOY_TYPE=create \
+            --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=authenticated,MODE=create \
             --verbosity=info
           
           echo "✅ 新規関数作成完了"
