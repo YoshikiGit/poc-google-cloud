@@ -1,5 +1,5 @@
 steps:
-  # ステップ1: サービス存在チェックと適切な処理の実行
+  # ステップ1: サービス存在チェック
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
@@ -10,7 +10,7 @@ steps:
         # Cloud Runサービスとして存在するかチェック
         if gcloud run services describe hello-world --region=${_REGION} 2>/dev/null; then
           echo "✅ 既存のCloud Runサービスが見つかりました"
-          MODE="update"
+          echo "update" > /workspace/deploy_mode.txt
           
           echo "現在の設定:"
           gcloud run services describe hello-world --region=${_REGION} \
@@ -23,12 +23,12 @@ steps:
             )"
         else
           echo "📝 既存サービスが見つかりません"
-          MODE="create"
+          echo "create" > /workspace/deploy_mode.txt
         fi
         
+        DEPLOY_MODE=$(cat /workspace/deploy_mode.txt)
         echo ""
-        echo "デプロイモード: $MODE"
-        echo "$MODE" > /workspace/mode.txt
+        echo "デプロイモード: $DEPLOY_MODE"
         
         echo ""
         echo "=== 置換変数の確認 ==="
@@ -41,15 +41,15 @@ steps:
         echo ""
     id: 'check-service'
 
-  # ステップ2: 適切なデプロイ方法を実行
+  # ステップ2: 既存サービス更新（条件付き実行）
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        MODE=$(cat /workspace/mode.txt)
+        DEPLOY_MODE=$(cat /workspace/deploy_mode.txt)
         
-        if [ "$MODE" = "update" ]; then
+        if [ "$DEPLOY_MODE" = "update" ]; then
           echo "=== 既存サービスの更新 ==="
           
           # Cloud Runサービスとして更新
@@ -61,12 +61,25 @@ steps:
             --timeout=${_TIMEOUT} \
             --max-instances=${_MAX_INSTANCES} \
             --min-instances=${_MIN_INSTANCES} \
-            --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=authenticated,MODE=update \
+            --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=authenticated \
             --verbosity=info
           
           echo "✅ 既存サービス更新完了"
-          
         else
+          echo "既存サービスが見つからないため、このステップをスキップします"
+        fi
+    id: 'update-service'
+    waitFor: ['check-service']
+
+  # ステップ3: 新規サービス作成（条件付き実行）
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        DEPLOY_MODE=$(cat /workspace/deploy_mode.txt)
+        
+        if [ "$DEPLOY_MODE" = "create" ]; then
           echo "=== 新規関数の作成 ==="
           
           # Cloud Run Functionsとして新規作成
@@ -83,24 +96,14 @@ steps:
             --timeout=${_TIMEOUT} \
             --max-instances=${_MAX_INSTANCES} \
             --min-instances=${_MIN_INSTANCES} \
-            --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=authenticated,MODE=create \
+            --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=authenticated \
             --verbosity=info
           
           echo "✅ 新規関数作成完了"
+        else
+          echo "既存サービスが見つかったため、このステップをスキップします"
         fi
-        
-        echo ""
-        echo "=== デプロイ後の設定確認 ==="
-        gcloud run services describe hello-world --region=${_REGION} \
-          --format="table(
-            status.url,
-            status.ingress,
-            spec.template.spec.containers[0].resources.limits.memory,
-            spec.template.spec.timeoutSeconds,
-            spec.template.metadata.annotations['autoscaling.knative.dev/maxScale'],
-            spec.template.metadata.annotations['autoscaling.knative.dev/minScale']
-          )"
-    id: 'smart-deploy'
+    id: 'create-service'
     waitFor: ['check-service']
 
 
