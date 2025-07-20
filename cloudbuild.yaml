@@ -7,7 +7,7 @@ steps:
       - |
         echo "=== 現在の設定確認 ==="
         if gcloud run services describe hello-world --region=${_REGION} 2>/dev/null; then
-          echo "既存サービスが見つかりました。上書き更新します。"
+          echo "既存サービスが見つかったので上書き更新。"
           gcloud run services describe hello-world --region=${_REGION} \
             --format="table(
               status.url,
@@ -17,7 +17,7 @@ steps:
               spec.template.metadata.annotations['autoscaling.knative.dev/maxScale']
             )"
         else
-          echo "新規デプロイを実行します。"
+          echo "新規デプロイを実行。"
         fi
         echo ""
     id: 'check-current'
