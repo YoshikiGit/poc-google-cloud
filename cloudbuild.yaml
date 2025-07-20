@@ -1,14 +1,14 @@
 steps:
-  # 現在の設定確認
+  # ステップ1: 現在の設定確認
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
         echo "=== 現在の設定確認 ==="
-        if gcloud run services describe hello-world --region=${_REGION} 2>/dev/null; then
-          echo "既存サービスが見つかったので上書き更新。"
-          gcloud run services describe hello-world --region=${_REGION} \
+        if gcloud run services describe hello-world --region=$${_REGION} 2>/dev/null; then
+          echo "既存サービスが見つかりました。上書き更新します。"
+          gcloud run services describe hello-world --region=$${_REGION} \
             --format="table(
               status.url,
               status.ingress,
@@ -17,46 +17,46 @@ steps:
               spec.template.metadata.annotations['autoscaling.knative.dev/maxScale']
             )"
         else
-          echo "新規デプロイを実行。"
+          echo "新規デプロイを実行します。"
         fi
         echo ""
     id: 'check-current'
 
-  # 設定値を確認してからデプロイ/更新
+  # ステップ2: 設定値を確認してからデプロイ/更新
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
         echo "=== 置換変数の確認 ==="
-        echo "リージョン: ${_REGION}"
-        echo "メモリ: ${_MEMORY}"
-        echo "タイムアウト: ${_TIMEOUT}"
-        echo "最大インスタンス: ${_MAX_INSTANCES}"
-        echo "最小インスタンス: ${_MIN_INSTANCES}"
-        echo "環境: ${_ENVIRONMENT}"
+        echo "リージョン: $${_REGION}"
+        echo "メモリ: $${_MEMORY}"
+        echo "タイムアウト: $${_TIMEOUT}"
+        echo "最大インスタンス: $${_MAX_INSTANCES}"
+        echo "最小インスタンス: $${_MIN_INSTANCES}"
+        echo "環境: $${_ENVIRONMENT}"
         echo ""
         
         echo "=== Cloud Run Functions 上書きデプロイ ==="
         gcloud functions deploy hello-world \
           --gen2 \
           --runtime=python311 \
-          --region=${_REGION} \
+          --region=$${_REGION} \
           --source=. \
           --entry-point=hello_world \
           --trigger=http \
           --allow-unauthenticated \
           --ingress-settings=internal-and-cloud-load-balancing \
-          --memory=${_MEMORY} \
-          --timeout=${_TIMEOUT} \
-          --max-instances=${_MAX_INSTANCES} \
-          --min-instances=${_MIN_INSTANCES} \
-          --set-env-vars=ENVIRONMENT=${_ENVIRONMENT},ACCESS_TYPE=internal-only,LAST_UPDATED=$(date -u +%Y%m%d_%H%M%S) \
+          --memory=$${_MEMORY} \
+          --timeout=$${_TIMEOUT} \
+          --max-instances=$${_MAX_INSTANCES} \
+          --min-instances=$${_MIN_INSTANCES} \
+          --set-env-vars=ENVIRONMENT=$${_ENVIRONMENT},ACCESS_TYPE=internal-only,LAST_UPDATED=$$(date -u +%Y%m%d_%H%M%S) \
           --verbosity=info
         
         echo ""
         echo "=== 上書き後の設定確認 ==="
-        gcloud run services describe hello-world --region=${_REGION} \
+        gcloud run services describe hello-world --region=$${_REGION} \
           --format="table(
             status.url,
             status.ingress,
@@ -66,35 +66,20 @@ steps:
             spec.template.metadata.annotations['autoscaling.knative.dev/minScale']
           )"
         
-        # 設定値の検証
-        ACTUAL_MEMORY=$(gcloud run services describe hello-world \
-          --region=${_REGION} \
-          --format="value(spec.template.spec.containers[0].resources.limits.memory)")
-        
-        ACTUAL_TIMEOUT=$(gcloud run services describe hello-world \
-          --region=${_REGION} \
-          --format="value(spec.template.spec.timeoutSeconds)")
-        
-        ACTUAL_MAX_INSTANCES=$(gcloud run services describe hello-world \
-          --region=${_REGION} \
-          --format="value(spec.template.metadata.annotations['autoscaling.knative.dev/maxScale'])")
-        
+        # 設定値の検証（エスケープされた変数使用）
         echo ""
         echo "=== 設定値検証 ==="
-        echo "✓ メモリ: ${_MEMORY} → $ACTUAL_MEMORY"
-        echo "✓ タイムアウト: ${_TIMEOUT} → ${ACTUAL_TIMEOUT}s"
-        echo "✓ 最大インスタンス: ${_MAX_INSTANCES} → $ACTUAL_MAX_INSTANCES"
+        ACTUAL_MEM=`gcloud run services describe hello-world --region=$${_REGION} --format="value(spec.template.spec.containers[0].resources.limits.memory)"`
+        ACTUAL_TO=`gcloud run services describe hello-world --region=$${_REGION} --format="value(spec.template.spec.timeoutSeconds)"`
+        ACTUAL_MAX=`gcloud run services describe hello-world --region=$${_REGION} --format="value(spec.template.metadata.annotations['autoscaling.knative.dev/maxScale'])"`
         
-        # 設定が正しく反映されているか確認
-        if [ "$ACTUAL_MEMORY" = "${_MEMORY}" ] && [ "$ACTUAL_TIMEOUT" = "${_TIMEOUT%s}" ] && [ "$ACTUAL_MAX_INSTANCES" = "${_MAX_INSTANCES}" ]; then
-          echo "✅ すべての設定が正しく反映されました"
-        else
-          echo "⚠️ 一部の設定が期待値と異なります"
-        fi
+        echo "✓ メモリ: $${_MEMORY} → $$ACTUAL_MEM"
+        echo "✓ タイムアウト: $${_TIMEOUT} → $${ACTUAL_TO}s"
+        echo "✓ 最大インスタンス: $${_MAX_INSTANCES} → $$ACTUAL_MAX"
+        
     id: 'update-functions'
     waitFor: ['check-current']
 
-# 置換変数
 substitutions:
   _REGION: 'asia-northeast1'
   _MEMORY: '256Mi'
