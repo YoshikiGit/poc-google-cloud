@@ -9,18 +9,16 @@ steps:
         
         # Cloud Runサービスとして存在するかチェック
         if gcloud run services describe hello-world --region=${_REGION} 2>/dev/null; then
-          echo "✅ 既存のCloud Runサービスが見つかりました"
-          echo "existing" > /workspace/service_status
+          _SERVICE_STATUS="existing"
           
           echo "現在の設定:"
           gcloud run services describe hello-world --region=${_REGION} \
             --format="table(status.url,status.ingress,spec.template.spec.containers[0].resources.limits.memory)"
         else
           echo "📝 既存サービスが見つかりません"
-          echo "new" > /workspace/service_status
+          _SERVICE_STATUS="not existing"
         fi
         
-        _SERVICE_STATUS=`cat /workspace/service_status`
         echo "サービス状態: ${_SERVICE_STATUS}"
         
         echo ""
@@ -32,14 +30,12 @@ steps:
         echo "環境: ${_ENVIRONMENT}"
     id: 'check-service'
 
-  # ステップ2: 既存サービス更新
+  # ステップ2: 新規サービス作成/ 既存サービス更新
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
-      - |
-        _SERVICE_STATUS=`cat /workspace/service_status`
-        
+      - |        
         if [ "${_SERVICE_STATUS}" = "existing" ]; then
           echo "=== 既存サービスの更新 ==="
           
@@ -56,22 +52,6 @@ steps:
           
           echo "✅ 既存サービス更新完了"
         else
-          echo "新規作成のため、このステップをスキップ"
-        fi
-    id: 'update-existing'
-    waitFor: ['check-service']
-
-  # ステップ3: 新規サービス作成
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        _SERVICE_STATUS=`cat /workspace/service_status`
-        
-        if [ "${_SERVICE_STATUS}" = "new" ]; then
-          echo "=== 新規関数の作成 ==="
-          
           gcloud functions deploy hello-world \
             --gen2 \
             --runtime=python311 \
@@ -89,12 +69,9 @@ steps:
             --verbosity=info
           
           echo "✅ 新規関数作成完了"
-        else
-          echo "既存サービス更新のため、このステップをスキップ"
         fi
-    id: 'create-new'
+    id: 'create-or-update-service'
     waitFor: ['check-service']
-
 
 substitutions:
   _REGION: 'asia-northeast1'
