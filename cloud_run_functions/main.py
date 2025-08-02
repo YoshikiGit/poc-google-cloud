@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @functions_framework.http
-def hello_world(request):
+def cf_hello_world(request):
     """
     基本的なHTTP関数のサンプル
     GET/POSTリクエストを処理
